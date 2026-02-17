@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from manim_app.core.crypto import mask_account, mask_rrn
-from manim_app.core.validation import validate_phone, validate_rrn
+from manim_app.core.validation import (
+    validate_optional_number,
+    validate_phone,
+    validate_required_text,
+    validate_rrn,
+)
 from manim_app.models.customer import CustomerCreate, CustomerView
 from manim_app.repositories.audit_repository import AuditRepository
 from manim_app.repositories.customer_repository import CustomerRepository
@@ -19,17 +24,36 @@ class CustomerService:
     @staticmethod
     def _validate(payload: CustomerCreate) -> CustomerCreate:
         return CustomerCreate(
-            name=payload.name.strip(),
+            name=validate_required_text(payload.name, "이름"),
             rrn=validate_rrn(payload.rrn),
             phone=validate_phone(payload.phone.strip()),
-            address=payload.address.strip(),
+            address=validate_required_text(payload.address, "주소"),
             job=payload.job.strip(),
-            payment_card=payload.payment_card.strip(),
-            payment_account=payload.payment_account.strip(),
-            payout_account=payload.payout_account.strip(),
+            payment_card=validate_optional_number(
+                payload.payment_card,
+                "카드번호",
+                min_length=12,
+                max_length=19,
+            ),
+            payment_account=validate_optional_number(
+                payload.payment_account,
+                "결제 계좌",
+                min_length=8,
+                max_length=20,
+            ),
+            payout_account=validate_optional_number(
+                payload.payout_account,
+                "보험금 수령 계좌",
+                min_length=8,
+                max_length=20,
+            ),
             medical_history=payload.medical_history.strip(),
             note=payload.note.strip(),
         )
+
+    def next_customer_id(self) -> int:
+        """Return the next customer id for UI defaults."""
+        return self._customer_repo.next_customer_id()
 
     def create_customer(self, payload: CustomerCreate) -> int:
         """Validate, persist, and audit customer creation."""
@@ -96,6 +120,33 @@ class CustomerService:
                 )
             )
         self._audit_repo.add_log("READ", "customer", None, f"customer list limit={limit} offset={offset}")
+        return customers
+
+    def search_customers(self, field: str, keyword: str, limit: int = 100, offset: int = 0) -> list[CustomerView]:
+        """Search customers by selected field."""
+        rows = self._customer_repo.search_customers(field=field, keyword=keyword, limit=limit, offset=offset)
+        customers: list[CustomerView] = []
+        for row in rows:
+            rrn = self._customer_repo.decrypt_rrn(row["rrn_encrypted"])
+            card = self._customer_repo.decrypt_account(row["payment_card_encrypted"])
+            account = self._customer_repo.decrypt_account(row["payment_account_encrypted"])
+            payout = self._customer_repo.decrypt_account(row["payout_account_encrypted"])
+            customers.append(
+                CustomerView(
+                    id=row["id"],
+                    name=row["name"],
+                    rrn=mask_rrn(rrn),
+                    phone=row["phone"],
+                    address=row["address"],
+                    job=row["job"],
+                    payment_card=mask_account(card),
+                    payment_account=mask_account(account),
+                    payout_account=mask_account(payout),
+                    medical_history=row["medical_history"],
+                    note=row["note"],
+                )
+            )
+        self._audit_repo.add_log("READ", "customer", None, f"customer search field={field} keyword={keyword}")
         return customers
 
     def update_customer(self, customer_id: int, payload: CustomerCreate) -> None:

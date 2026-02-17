@@ -44,6 +44,11 @@ class InsuranceRepository:
         )
         return int(cursor.lastrowid)
 
+    def next_insurance_id(self) -> int:
+        """Return the next insurance id in insertion order."""
+        row = self._pool.fetchone("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM insurances")
+        return int(row["next_id"]) if row else 1
+
     def get_insurance(self, insurance_id: int) -> dict[str, Any] | None:
         """Fetch one active insurance record."""
         row = self._pool.fetchone(
@@ -87,6 +92,43 @@ class InsuranceRepository:
             LIMIT ? OFFSET ?
             """,
             (customer_id, limit, offset),
+        )
+        return [dict(row) for row in rows]
+
+    def search_insurances(self, field: str, keyword: str, limit: int, offset: int) -> list[dict[str, Any]]:
+        """Search active insurances by a permitted text field."""
+        allowed = {
+            "id": "CAST(id AS TEXT)",
+            "customer_id": "CAST(customer_id AS TEXT)",
+            "company": "company",
+            "policy_number": "policy_number",
+            "product_name": "product_name",
+            "insured_person": "insured_person",
+            "beneficiary": "beneficiary",
+        }
+        if field not in allowed:
+            raise ValueError("지원하지 않는 보험 검색 필드입니다.")
+
+        rows = self._pool.fetchall(
+            f"""
+            SELECT
+                id,
+                customer_id,
+                contract_date,
+                company,
+                policy_number,
+                product_name,
+                premium,
+                insured_person,
+                payment_day,
+                beneficiary
+            FROM insurances
+            WHERE deleted_at IS NULL
+              AND {allowed[field]} LIKE ?
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (f"%{keyword.strip()}%", limit, offset),
         )
         return [dict(row) for row in rows]
 

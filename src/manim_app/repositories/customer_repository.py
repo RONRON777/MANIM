@@ -63,6 +63,11 @@ class CustomerRepository:
         """Decrypt stored account/card bytes."""
         return self._crypto.decrypt_text(encrypted_value)
 
+    def next_customer_id(self) -> int:
+        """Return the next customer id in insertion order."""
+        row = self._pool.fetchone("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM customers")
+        return int(row["next_id"]) if row else 1
+
     def exists_active_customer(self, customer_id: int) -> bool:
         """Return True when active customer exists."""
         row = self._pool.fetchone(
@@ -121,6 +126,42 @@ class CustomerRepository:
             LIMIT ? OFFSET ?
             """,
             (limit, offset),
+        )
+        return [dict(row) for row in rows]
+
+    def search_customers(self, field: str, keyword: str, limit: int, offset: int) -> list[dict[str, Any]]:
+        """Search active customers by a permitted text field."""
+        allowed = {
+            "id": "CAST(id AS TEXT)",
+            "name": "name",
+            "phone": "phone",
+            "address": "address",
+            "job": "job",
+        }
+        if field not in allowed:
+            raise ValueError("지원하지 않는 고객 검색 필드입니다.")
+
+        rows = self._pool.fetchall(
+            f"""
+            SELECT
+                id,
+                name,
+                rrn_encrypted,
+                phone,
+                address,
+                job,
+                payment_card_encrypted,
+                payment_account_encrypted,
+                payout_account_encrypted,
+                medical_history,
+                note
+            FROM customers
+            WHERE deleted_at IS NULL
+              AND {allowed[field]} LIKE ?
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (f"%{keyword.strip()}%", limit, offset),
         )
         return [dict(row) for row in rows]
 

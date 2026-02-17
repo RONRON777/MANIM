@@ -80,3 +80,27 @@ def test_customer_and_insurance_crud(tmp_path) -> None:
 
     insurance_service.delete_insurance(insurance_id)
     customer_service.delete_customer(customer_id)
+
+
+def test_customer_optional_payment_fields_can_be_empty(tmp_path) -> None:
+    customer_service, _ = build_services(tmp_path)
+
+    customer_id = customer_service.create_customer(
+        CustomerCreate(
+            name="김철수",
+            rrn="971013-9019902",
+            phone="010-2222-3333",
+            address="부산",
+            job="디자이너",
+            payment_card="",
+            payment_account="",
+            payout_account="",
+            medical_history="없음",
+            note="빈 결제정보 허용",
+        )
+    )
+
+    customer = customer_service.get_customer(customer_id, reveal_sensitive=True)
+    assert customer.payment_card == ""
+    assert customer.payment_account == ""
+    assert customer.payout_account == ""

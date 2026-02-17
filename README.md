@@ -81,6 +81,27 @@
 
 ## 실행 준비
 
+빠른 실행 스크립트:
+
+```bash
+./start.sh
+```
+
+`start.sh`는 `setup + keys + app`을 한 번에 처리하며, 실패 시 이유를 한국어로 안내합니다.
+
+개발용 명령:
+
+```bash
+./run.sh setup
+./run.sh keys
+export MANIM_DB_KEY='...'
+export MANIM_ENCRYPTION_KEY='...'
+./run.sh test
+./run.sh app
+```
+
+수동 실행:
+
 1. 의존성 설치
 
 ```bash

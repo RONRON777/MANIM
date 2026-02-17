@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 
 PHONE_PATTERN = re.compile(r"^010-\d{4}-\d{4}$")
+NON_DIGIT_PATTERN = re.compile(r"[^\d]")
 
 
 def validate_rrn(rrn: str) -> str:
@@ -52,3 +53,30 @@ def validate_payment_day(payment_day: int) -> int:
     if payment_day < 1 or payment_day > 31:
         raise ValueError("결제일은 1~31 사이여야 합니다.")
     return payment_day
+
+
+def validate_required_text(value: str, field_name: str) -> str:
+    """Validate non-empty text fields."""
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field_name}은(는) 필수 입력입니다.")
+    return normalized
+
+
+def validate_optional_number(
+    value: str,
+    field_name: str,
+    min_length: int,
+    max_length: int,
+) -> str:
+    """Validate optional numeric fields, returning normalized digits."""
+    normalized = value.strip()
+    if not normalized:
+        return ""
+
+    digits = NON_DIGIT_PATTERN.sub("", normalized)
+    if not digits.isdigit():
+        raise ValueError(f"{field_name} 형식이 올바르지 않습니다.")
+    if len(digits) < min_length or len(digits) > max_length:
+        raise ValueError(f"{field_name} 길이는 {min_length}~{max_length}자리여야 합니다.")
+    return digits

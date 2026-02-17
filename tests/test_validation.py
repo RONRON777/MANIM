@@ -7,9 +7,11 @@ import pytest
 
 from manim_app.core.validation import (
     validate_contract_date,
+    validate_optional_number,
     validate_payment_day,
     validate_phone,
     validate_premium,
+    validate_required_text,
     validate_rrn,
 )
 
@@ -35,3 +37,16 @@ def test_validate_payment_day_range() -> None:
     assert validate_payment_day(15) == 15
     with pytest.raises(ValueError):
         validate_payment_day(0)
+
+
+def test_validate_required_text() -> None:
+    assert validate_required_text(" 보험사 ", "보험사") == "보험사"
+    with pytest.raises(ValueError):
+        validate_required_text("   ", "보험사")
+
+
+def test_validate_optional_number_empty_or_digits() -> None:
+    assert validate_optional_number("", "결제 계좌", 8, 20) == ""
+    assert validate_optional_number("1234-5678-9012", "카드번호", 12, 19) == "123456789012"
+    with pytest.raises(ValueError):
+        validate_optional_number("abcd", "카드번호", 12, 19)

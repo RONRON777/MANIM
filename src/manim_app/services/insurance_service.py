@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from manim_app.core.validation import validate_contract_date, validate_payment_day, validate_premium
+from manim_app.core.validation import (
+    validate_contract_date,
+    validate_payment_day,
+    validate_premium,
+    validate_required_text,
+)
 from manim_app.models.insurance import InsuranceCreate, InsuranceView
 from manim_app.repositories.audit_repository import AuditRepository
 from manim_app.repositories.customer_repository import CustomerRepository
@@ -29,13 +34,13 @@ class InsuranceService:
         return InsuranceCreate(
             customer_id=payload.customer_id,
             contract_date=validate_contract_date(payload.contract_date),
-            company=payload.company.strip(),
-            policy_number=payload.policy_number.strip(),
-            product_name=payload.product_name.strip(),
+            company=validate_required_text(payload.company, "보험사"),
+            policy_number=validate_required_text(payload.policy_number, "증권번호"),
+            product_name=validate_required_text(payload.product_name, "상품명"),
             premium=validate_premium(payload.premium),
-            insured_person=payload.insured_person.strip(),
+            insured_person=validate_required_text(payload.insured_person, "피보험자"),
             payment_day=validate_payment_day(int(payload.payment_day)),
-            beneficiary=payload.beneficiary.strip(),
+            beneficiary=validate_required_text(payload.beneficiary, "수익자"),
         )
 
     @staticmethod
@@ -52,6 +57,10 @@ class InsuranceService:
             payment_day=row["payment_day"],
             beneficiary=row["beneficiary"],
         )
+
+    def next_insurance_id(self) -> int:
+        """Return the next insurance id for UI defaults."""
+        return self._insurance_repo.next_insurance_id()
 
     def create_insurance(self, payload: InsuranceCreate) -> int:
         """Validate, persist, and audit insurance creation."""
@@ -80,6 +89,12 @@ class InsuranceService:
             None,
             f"insurance list customer_id={customer_id} limit={limit} offset={offset}",
         )
+        return [self._to_view(row) for row in rows]
+
+    def search_insurances(self, field: str, keyword: str, limit: int = 100, offset: int = 0) -> list[InsuranceView]:
+        """Search insurances by selected field."""
+        rows = self._insurance_repo.search_insurances(field=field, keyword=keyword, limit=limit, offset=offset)
+        self._audit_repo.add_log("READ", "insurance", None, f"insurance search field={field} keyword={keyword}")
         return [self._to_view(row) for row in rows]
 
     def update_insurance(self, insurance_id: int, payload: InsuranceCreate) -> None:

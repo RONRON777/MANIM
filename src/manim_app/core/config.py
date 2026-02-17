@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,12 +34,34 @@ class AppConfig:
     logging: LoggingConfig
 
 
-DEFAULT_CONFIG_PATH = Path("config/security.yaml")
+DEFAULT_CONFIG_REL_PATH = Path("config/security.yaml")
+
+
+def resolve_default_config_path() -> Path:
+    """Resolve configuration path for source and packaged execution."""
+    env_path = os.getenv("MANIM_CONFIG_PATH")
+    if env_path:
+        return Path(env_path)
+
+    candidates: list[Path] = []
+
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.append(exe_dir / DEFAULT_CONFIG_REL_PATH)
+
+    candidates.append(Path.cwd() / DEFAULT_CONFIG_REL_PATH)
+    candidates.append(Path(__file__).resolve().parents[3] / DEFAULT_CONFIG_REL_PATH)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0] if candidates else DEFAULT_CONFIG_REL_PATH
 
 
 def load_config(config_path: Path | None = None) -> AppConfig:
     """Load the app configuration from YAML."""
-    path = config_path or DEFAULT_CONFIG_PATH
+    path = config_path or resolve_default_config_path()
     with path.open("r", encoding="utf-8") as file:
         raw = yaml.safe_load(file)
 

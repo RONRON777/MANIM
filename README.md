@@ -101,6 +101,16 @@ start.bat
 ./start.ps1
 ```
 
+Windows 완전 배포(.exe + 설치파일) 빌드:
+
+```powershell
+# .exe 빌드
+powershell -ExecutionPolicy Bypass -File tools/windows/build.ps1
+
+# 설치파일(Inno Setup)까지 빌드
+powershell -ExecutionPolicy Bypass -File tools/windows/build.ps1 -Installer
+```
+
 개발용 명령:
 
 ```bash

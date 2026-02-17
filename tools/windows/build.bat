@@ -1,8 +1,21 @@
 @echo off
 setlocal
+chcp 65001 >nul
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
+
 set SCRIPT_DIR=%~dp0
 for %%I in ("%SCRIPT_DIR%..\..") do set ROOT_DIR=%%~fI
 pushd "%ROOT_DIR%" >nul
+
+set SPEC_PATH=%ROOT_DIR%\tools\windows\MANIM.spec
+set DIST_DIR=%ROOT_DIR%\dist\MANIM
+set DIST_CFG_DIR=%DIST_DIR%\config
+set DIST_EXE=%ROOT_DIR%\dist\MANIM.exe
+set DIST_PACKED_EXE=%DIST_DIR%\MANIM.exe
+set CFG_FILE=%ROOT_DIR%\config\security.yaml
+set README_FILE=%ROOT_DIR%\README.md
+set README_OUT=%DIST_DIR%\README.txt
 
 set PY_CMD=
 where py >nul 2>&1
@@ -13,7 +26,7 @@ if "%PY_CMD%"=="" (
 )
 
 if "%PY_CMD%"=="" (
-  echo [실패] Python 실행 파일을 찾지 못했습니다. Python 3를 설치하세요.
+  echo [FAILED] Python executable not found. Install Python 3.9+.
   set EXIT_CODE=1
   goto END
 )
@@ -28,35 +41,35 @@ echo [2/4] Install build dependencies
 %PY_CMD% -m pip install --user pyinstaller PySide6 PyYAML cryptography || goto FAIL
 
 echo [3/4] Build MANIM.exe
-%PY_CMD% -m PyInstaller --noconfirm --clean tools\windows\MANIM.spec || goto FAIL
+%PY_CMD% -m PyInstaller --noconfirm --clean "%SPEC_PATH%" || goto FAIL
 
-if not exist "dist\MANIM" mkdir "dist\MANIM"
-if not exist "dist\MANIM\config" mkdir "dist\MANIM\config"
-copy /Y "dist\MANIM.exe" "dist\MANIM\MANIM.exe" >nul || goto FAIL
-copy /Y "config\security.yaml" "dist\MANIM\config\security.yaml" >nul || goto FAIL
-copy /Y "README.md" "dist\MANIM\README.txt" >nul || goto FAIL
-echo Output: dist\MANIM\MANIM.exe
+if not exist "%DIST_DIR%" mkdir "%DIST_DIR%"
+if not exist "%DIST_CFG_DIR%" mkdir "%DIST_CFG_DIR%"
+copy /Y "%DIST_EXE%" "%DIST_PACKED_EXE%" >nul || goto FAIL
+copy /Y "%CFG_FILE%" "%DIST_CFG_DIR%\security.yaml" >nul || goto FAIL
+copy /Y "%README_FILE%" "%README_OUT%" >nul || goto FAIL
+echo Output: %DIST_PACKED_EXE%
 
 if /I "%~1"=="installer" (
   echo [4/4] Build installer with Inno Setup
   set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
   if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
   if not exist "%ISCC%" (
-    echo [실패] Inno Setup 6 not found. Install it and rerun with installer mode.
+    echo [FAILED] Inno Setup 6 not found. Install it and rerun installer mode.
     goto FAIL
   )
-  "%ISCC%" tools\windows\installer.iss || goto FAIL
-  echo Installer output: dist\installer\MANIM-Setup.exe
+  "%ISCC%" "%ROOT_DIR%\tools\windows\installer.iss" || goto FAIL
+  echo Installer output: %ROOT_DIR%\dist\installer\MANIM-Setup.exe
 )
 
 set EXIT_CODE=0
 goto END
 
 :PYVER_FAIL
-echo [실패] Python 3.9 이상이 필요합니다.
+echo [FAILED] Python 3.9+ is required.
 where py >nul 2>&1
 if not errorlevel 1 (
-  echo [안내] 현재 py 런처에서 인식된 Python 목록:
+  echo [INFO] Python versions detected by py launcher:
   py -0p
 )
 set EXIT_CODE=1
@@ -69,10 +82,10 @@ set EXIT_CODE=1
 popd >nul
 echo.
 if not "%EXIT_CODE%"=="0" (
-  echo [실패] 빌드 중 오류가 발생했습니다. 위 메시지를 확인하세요.
+  echo [FAILED] Build did not complete. Check messages above.
   pause
   exit /b %EXIT_CODE%
 )
-echo [완료] 빌드가 끝났습니다.
+echo [DONE] Build completed.
 pause
 exit /b 0

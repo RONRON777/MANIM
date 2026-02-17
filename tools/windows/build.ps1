@@ -3,9 +3,36 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $Root
+
+$SpecPath = Join-Path $Root 'tools\windows\MANIM.spec'
+$DistDir = Join-Path $Root 'dist\MANIM'
+$DistConfigDir = Join-Path $DistDir 'config'
+$DistExe = Join-Path $Root 'dist\MANIM.exe'
+$DistPackedExe = Join-Path $DistDir 'MANIM.exe'
+$SecurityConfig = Join-Path $Root 'config\security.yaml'
+$ReadmeFile = Join-Path $Root 'README.md'
+$ReadmeOut = Join-Path $DistDir 'README.txt'
 $PythonCommand = $null
+
+function Invoke-Checked {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string[]]$CommandParts
+  )
+  $command = $CommandParts[0]
+  $args = @()
+  if ($CommandParts.Count -gt 1) {
+    $args = $CommandParts[1..($CommandParts.Count - 1)]
+  }
+  & $command @args
+  if ($LASTEXITCODE -ne 0) {
+    throw "Command failed: $($CommandParts -join ' ')"
+  }
+}
 
 function Resolve-PythonCommand {
   $py = Get-Command py -ErrorAction SilentlyContinue
@@ -16,19 +43,21 @@ function Resolve-PythonCommand {
   if ($python) {
     return @('python')
   }
-  throw 'Python 실행 파일을 찾지 못했습니다. Python 3를 설치하고 다시 시도하세요.'
+  throw 'Python executable not found. Install Python 3.9+ and retry.'
 }
 
 function Assert-PythonVersion {
-  & $PythonCommand -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)"
+  $command = $PythonCommand[0]
+  $args = @('-c', 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)')
+  & $command @args
   if ($LASTEXITCODE -ne 0) {
-    Write-Host '[안내] Python 3.9 이상이 필요합니다.'
+    Write-Host '[INFO] Python 3.9+ is required.'
     $py = Get-Command py -ErrorAction SilentlyContinue
     if ($py) {
-      Write-Host '[안내] 현재 py 런처에서 인식된 Python 목록:'
+      Write-Host '[INFO] Python versions detected by py launcher:'
       & py -0p
     }
-    throw '지원되지 않는 Python 버전입니다. Python 3.9+를 설치/기본값으로 설정하세요.'
+    throw 'Unsupported Python version. Install/select Python 3.9+ and retry.'
   }
 }
 
@@ -36,34 +65,41 @@ $PythonCommand = Resolve-PythonCommand
 Assert-PythonVersion
 
 Write-Host '[1/4] Check Python/pip'
-& $PythonCommand --version
-& $PythonCommand -m pip --version
+Invoke-Checked -CommandParts ($PythonCommand + @('--version'))
+Invoke-Checked -CommandParts ($PythonCommand + @('-m', 'pip', '--version'))
 
 Write-Host '[2/4] Install build dependencies'
-& $PythonCommand -m pip install --user --upgrade pip
-& $PythonCommand -m pip install --user pyinstaller PySide6 PyYAML cryptography
+Invoke-Checked -CommandParts ($PythonCommand + @('-m', 'pip', 'install', '--user', '--upgrade', 'pip'))
+Invoke-Checked -CommandParts (
+  $PythonCommand + @('-m', 'pip', 'install', '--user', 'pyinstaller', 'PySide6', 'PyYAML', 'cryptography')
+)
 
 Write-Host '[3/4] Build MANIM.exe'
-& $PythonCommand -m PyInstaller --noconfirm --clean tools\windows\MANIM.spec
+Invoke-Checked -CommandParts (
+  $PythonCommand + @('-m', 'PyInstaller', '--noconfirm', '--clean', $SpecPath)
+)
 
-if (-not (Test-Path 'dist\MANIM')) {
-  New-Item -ItemType Directory -Path 'dist\MANIM' | Out-Null
+if (-not (Test-Path $DistDir)) {
+  New-Item -ItemType Directory -Path $DistDir | Out-Null
 }
-if (-not (Test-Path 'dist\MANIM\config')) {
-  New-Item -ItemType Directory -Path 'dist\MANIM\config' | Out-Null
+if (-not (Test-Path $DistConfigDir)) {
+  New-Item -ItemType Directory -Path $DistConfigDir | Out-Null
 }
-Copy-Item 'dist\MANIM.exe' 'dist\MANIM\MANIM.exe' -Force
-Copy-Item 'config\security.yaml' 'dist\MANIM\config\security.yaml' -Force
-Copy-Item 'README.md' 'dist\MANIM\README.txt' -Force
+Copy-Item $DistExe $DistPackedExe -Force
+Copy-Item $SecurityConfig (Join-Path $DistConfigDir 'security.yaml') -Force
+Copy-Item $ReadmeFile $ReadmeOut -Force
 
-Write-Host 'Output: dist\MANIM\MANIM.exe'
+Write-Host "Output: $DistPackedExe"
 
 if ($Installer) {
   Write-Host '[4/4] Build installer with Inno Setup'
   $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
   if (-not (Test-Path $iscc)) {
-    throw 'Inno Setup 6 not found. Install it and rerun with -Installer.'
+    $iscc = "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
   }
-  & $iscc tools\windows\installer.iss
+  if (-not (Test-Path $iscc)) {
+    throw 'Inno Setup 6 not found. Install it and rerun with installer mode.'
+  }
+  Invoke-Checked -CommandParts @($iscc, (Join-Path $Root 'tools\windows\installer.iss'))
   Write-Host 'Installer output: dist\installer\MANIM-Setup.exe'
 }

@@ -95,7 +95,13 @@ class InsuranceRepository:
         )
         return [dict(row) for row in rows]
 
-    def search_insurances(self, field: str, keyword: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    def search_insurances(
+        self,
+        field: str,
+        keyword: str,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, Any]]:
         """Search active insurances by a permitted text field."""
         allowed = {
             "id": "CAST(id AS TEXT)",

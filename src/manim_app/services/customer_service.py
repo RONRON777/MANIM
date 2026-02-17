@@ -127,12 +127,28 @@ class CustomerService:
                     note=row["note"],
                 )
             )
-        self._audit_repo.add_log("READ", "customer", None, f"customer list limit={limit} offset={offset}")
+        self._audit_repo.add_log(
+            "READ",
+            "customer",
+            None,
+            f"customer list limit={limit} offset={offset}",
+        )
         return customers
 
-    def search_customers(self, field: str, keyword: str, limit: int = 100, offset: int = 0) -> list[CustomerView]:
+    def search_customers(
+        self,
+        field: str,
+        keyword: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[CustomerView]:
         """Search customers by selected field."""
-        rows = self._customer_repo.search_customers(field=field, keyword=keyword, limit=limit, offset=offset)
+        rows = self._customer_repo.search_customers(
+            field=field,
+            keyword=keyword,
+            limit=limit,
+            offset=offset,
+        )
         customers: list[CustomerView] = []
         for row in rows:
             rrn = self._customer_repo.decrypt_rrn(row["rrn_encrypted"])
@@ -154,7 +170,12 @@ class CustomerService:
                     note=row["note"],
                 )
             )
-        self._audit_repo.add_log("READ", "customer", None, f"customer search field={field} keyword={keyword}")
+        self._audit_repo.add_log(
+            "READ",
+            "customer",
+            None,
+            f"customer search field={field} keyword={keyword}",
+        )
         return customers
 
     def update_customer(self, customer_id: int, payload: CustomerCreate) -> None:

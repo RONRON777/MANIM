@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from manim_app.models.customer import CustomerCreate
 from manim_app.models.insurance import InsuranceCreate
@@ -88,12 +88,16 @@ class CsvImportService:
                     )
                     self._customer_service.create_customer(payload)
                     created_count += 1
-                except Exception as error:  # pylint: disable=broad-except
+                except (ValueError, KeyError, TypeError) as error:
                     failed_count += 1
                     if len(errors) < 10:
                         errors.append(f"{row_index}행: {error}")
 
-        return CsvImportResult(created_count=created_count, failed_count=failed_count, error_messages=errors)
+        return CsvImportResult(
+            created_count=created_count,
+            failed_count=failed_count,
+            error_messages=errors,
+        )
 
     def import_insurances(self, file_path: str) -> CsvImportResult:
         """Import insurance CSV and return success/failure counts."""
@@ -120,9 +124,13 @@ class CsvImportService:
                     )
                     self._insurance_service.create_insurance(payload)
                     created_count += 1
-                except Exception as error:  # pylint: disable=broad-except
+                except (InvalidOperation, ValueError, KeyError, TypeError) as error:
                     failed_count += 1
                     if len(errors) < 10:
                         errors.append(f"{row_index}행: {error}")
 
-        return CsvImportResult(created_count=created_count, failed_count=failed_count, error_messages=errors)
+        return CsvImportResult(
+            created_count=created_count,
+            failed_count=failed_count,
+            error_messages=errors,
+        )

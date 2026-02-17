@@ -77,21 +77,15 @@ function Ensure-Keys {
     . $EnvFile
   }
   if (-not $env:MANIM_DB_KEY -or -not $env:MANIM_ENCRYPTION_KEY) {
-    $lines = & $VenvPython $GenerateKeysScript
-    if ($LASTEXITCODE -ne 0) {
-      throw 'Key generation failed.'
-    }
-    $db = ($lines | Where-Object { $_ -like 'export MANIM_DB_KEY=*' })
-    $enc = ($lines | Where-Object { $_ -like 'export MANIM_ENCRYPTION_KEY=*' })
-    if (-not $db -or -not $enc) {
-      throw 'Could not parse generated keys.'
-    }
-    $dbValue = ($db -replace "^export MANIM_DB_KEY='", '') -replace "'$", ''
-    $encValue = ($enc -replace "^export MANIM_ENCRYPTION_KEY='", '') -replace "'$", ''
-    @(
-      "`$env:MANIM_DB_KEY='$dbValue'",
-      "`$env:MANIM_ENCRYPTION_KEY='$encValue'"
-    ) | Set-Content -Encoding UTF8 $EnvFile
+    Invoke-Checked -CommandParts @(
+      $VenvPython,
+      $GenerateKeysScript,
+      '--write-env',
+      $EnvFile,
+      '--format',
+      'powershell',
+      '--force'
+    )
     . $EnvFile
   }
 }

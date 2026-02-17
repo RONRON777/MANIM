@@ -47,6 +47,54 @@ function Resolve-PythonCommand {
   throw 'Python executable not found. Install Python 3.9+ and retry.'
 }
 
+function Resolve-IsccPath {
+  $isccCmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+  if ($isccCmd) {
+    return $isccCmd.Source
+  }
+
+  $candidates = @(
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+    "${env:LOCALAPPDATA}\Programs\Inno Setup 6\ISCC.exe"
+  )
+  foreach ($candidate in $candidates) {
+    if (Test-Path $candidate) {
+      return $candidate
+    }
+  }
+
+  $winget = Get-Command winget -ErrorAction SilentlyContinue
+  $allowInstall = $env:MANIM_AUTO_INSTALL_TOOLS -eq '1'
+  if (-not $allowInstall) {
+    throw (
+      'Inno Setup not found. Install manually or set MANIM_AUTO_INSTALL_TOOLS=1 ' +
+      'to allow automatic winget installation.'
+    )
+  }
+  if (-not $winget) {
+    throw 'Inno Setup is missing and winget is unavailable. Install Inno Setup 6 manually.'
+  }
+
+  Write-Host '[INFO] Inno Setup not found. Installing automatically via winget...'
+  Invoke-Checked -CommandParts @(
+    'winget', 'install', '--id', 'JRSoftware.InnoSetup', '-e',
+    '--accept-package-agreements', '--accept-source-agreements'
+  )
+
+  $isccCmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+  if ($isccCmd) {
+    return $isccCmd.Source
+  }
+  foreach ($candidate in $candidates) {
+    if (Test-Path $candidate) {
+      return $candidate
+    }
+  }
+
+  throw 'Inno Setup auto-install did not expose ISCC.exe. Reopen terminal and retry.'
+}
+
 function Assert-PythonVersion {
   $command = $PythonCommand[0]
   $args = @('-c', 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)')
@@ -70,9 +118,20 @@ Invoke-Checked -CommandParts ($PythonCommand + @('--version'))
 Invoke-Checked -CommandParts ($PythonCommand + @('-m', 'pip', '--version'))
 
 Write-Host '[2/4] Install build dependencies'
-Invoke-Checked -CommandParts ($PythonCommand + @('-m', 'pip', 'install', '--user', '--upgrade', 'pip'))
 Invoke-Checked -CommandParts (
-  $PythonCommand + @('-m', 'pip', 'install', '--user', 'pyinstaller', 'PySide6', 'PyYAML', 'cryptography')
+  $PythonCommand + @('-m', 'pip', 'install', '--user', '--upgrade', 'pip')
+)
+Invoke-Checked -CommandParts (
+  $PythonCommand + @(
+    '-m',
+    'pip',
+    'install',
+    '--user',
+    'pyinstaller',
+    'PySide6',
+    'PyYAML',
+    'cryptography'
+  )
 )
 
 Write-Host '[3/4] Build MANIM.exe'
@@ -98,13 +157,7 @@ Write-Host "Output: $DistPackedExe"
 
 if ($Installer) {
   Write-Host '[4/4] Build installer with Inno Setup'
-  $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-  if (-not (Test-Path $iscc)) {
-    $iscc = "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
-  }
-  if (-not (Test-Path $iscc)) {
-    throw 'Inno Setup 6 not found. Install it and rerun with installer mode.'
-  }
+  $iscc = Resolve-IsccPath
   Invoke-Checked -CommandParts @($iscc, (Join-Path $Root 'tools\windows\installer.iss'))
   Write-Host 'Installer output: dist\installer\MANIM-Setup.exe'
 }

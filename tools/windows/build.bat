@@ -34,7 +34,8 @@ if "%PY_CMD%"=="" (
 
 echo [1/4] Check Python/pip
 %PY_CMD% --version || goto FAIL
-%PY_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)" || goto PYVER_FAIL
+%PY_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)" ^
+  || goto PYVER_FAIL
 %PY_CMD% -m pip --version || goto FAIL
 
 echo [2/4] Install build dependencies
@@ -55,11 +56,41 @@ echo Output: %DIST_PACKED_EXE%
 
 if /I "%~1"=="installer" (
   echo [4/4] Build installer with Inno Setup
-  set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+  set "ISCC="
+  for /f "delims=" %%P in ('where ISCC.exe 2^>nul') do (
+    if not defined ISCC set "ISCC=%%P"
+  )
+  if not defined ISCC if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" ^
+    set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+  if not defined ISCC set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
   if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
   if not exist "%ISCC%" (
-    echo [FAILED] Inno Setup 6 not found. Install it and rerun installer mode.
-    goto FAIL
+    if /I not "%MANIM_AUTO_INSTALL_TOOLS%"=="1" (
+      echo [FAILED] Inno Setup not found.
+      echo [INFO] Install manually, or set MANIM_AUTO_INSTALL_TOOLS=1 for auto-install.
+      goto FAIL
+    )
+    where winget >nul 2>&1
+    if errorlevel 1 (
+      echo [FAILED] Inno Setup is missing and winget is unavailable.
+      echo [INFO] Install Inno Setup 6 manually, then rerun.
+      goto FAIL
+    )
+    echo [INFO] Inno Setup not found. Installing automatically via winget...
+    winget install --id JRSoftware.InnoSetup -e ^
+      --accept-package-agreements --accept-source-agreements || goto FAIL
+    for /f "delims=" %%P in ('where ISCC.exe 2^>nul') do (
+      if not defined ISCC set "ISCC=%%P"
+    )
+    if not defined ISCC if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" ^
+      set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+    if not defined ISCC set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+    if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+    if not exist "%ISCC%" (
+      echo [FAILED] Inno Setup auto-install did not expose ISCC.exe.
+      echo [INFO] Reopen cmd and rerun build_windows_installer.bat.
+      goto FAIL
+    )
   )
   "%ISCC%" "%ROOT_DIR%\tools\windows\installer.iss" || goto FAIL
   echo Installer output: %ROOT_DIR%\dist\installer\MANIM-Setup.exe

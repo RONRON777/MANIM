@@ -85,12 +85,21 @@ class InsuranceService:
         self._audit_repo.add_log("READ", "insurance", insurance_id, "insurance read")
         return self._to_view(row)
 
-    def list_insurances(self, customer_id: int, limit: int = 50, offset: int = 0) -> list[InsuranceView]:
+    def list_insurances(
+        self,
+        customer_id: int,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[InsuranceView]:
         """List insurances for one customer."""
         if not self._customer_repo.exists_active_customer(customer_id):
             raise ValueError("유효한 고객(계약자) ID가 아닙니다.")
 
-        rows = self._insurance_repo.list_insurances(customer_id=customer_id, limit=limit, offset=offset)
+        rows = self._insurance_repo.list_insurances(
+            customer_id=customer_id,
+            limit=limit,
+            offset=offset,
+        )
         self._audit_repo.add_log(
             "READ",
             "insurance",
@@ -99,10 +108,26 @@ class InsuranceService:
         )
         return [self._to_view(row) for row in rows]
 
-    def search_insurances(self, field: str, keyword: str, limit: int = 100, offset: int = 0) -> list[InsuranceView]:
+    def search_insurances(
+        self,
+        field: str,
+        keyword: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[InsuranceView]:
         """Search insurances by selected field."""
-        rows = self._insurance_repo.search_insurances(field=field, keyword=keyword, limit=limit, offset=offset)
-        self._audit_repo.add_log("READ", "insurance", None, f"insurance search field={field} keyword={keyword}")
+        rows = self._insurance_repo.search_insurances(
+            field=field,
+            keyword=keyword,
+            limit=limit,
+            offset=offset,
+        )
+        self._audit_repo.add_log(
+            "READ",
+            "insurance",
+            None,
+            f"insurance search field={field} keyword={keyword}",
+        )
         return [self._to_view(row) for row in rows]
 
     def update_insurance(self, insurance_id: int, payload: InsuranceCreate) -> None:

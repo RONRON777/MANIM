@@ -45,7 +45,8 @@ PY
   else
     echo "[INFO] installing GUI dependency: PySide6"
     if ! TMPDIR="$TMP_DIR" "$VENV_PIP" install "PySide6>=6.8.0"; then
-      echo "[WARN] PySide6 install failed. GUI 실행 시 네트워크가 필요할 수 있습니다."
+      echo "[WARN] PySide6 install failed."
+      echo "[WARN] GUI 실행 시 네트워크가 필요할 수 있습니다."
     fi
   fi
 }
@@ -64,7 +65,7 @@ USAGE
 
 run_keys() {
   ensure_venv
-  PYTHONPATH=src "$VENV_PY" scripts/generate_keys.py
+  PYTHONPATH=src "$VENV_PY" scripts/generate_keys.py --stdout --format shell-export
 }
 
 run_tests() {
@@ -87,7 +88,8 @@ import importlib.util
 raise SystemExit(0 if importlib.util.find_spec("PySide6") else 1)
 PY
   then
-    echo "[ERROR] PySide6가 설치되지 않았습니다. ./run.sh setup 을 다시 실행하세요."
+    echo "[ERROR] PySide6가 설치되지 않았습니다."
+    echo "[HINT] ./run.sh setup 을 다시 실행하세요."
     exit 1
   fi
 

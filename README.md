@@ -30,6 +30,8 @@
 - DB 키: 환경변수 `MANIM_DB_KEY`
 - 필드 암호화 키: 환경변수 `MANIM_ENCRYPTION_KEY` (32바이트 base64)
 - 설정 파일: `config/security.yaml` (키 값 자체는 저장하지 않음)
+- 키가 없고 DB가 없는 첫 실행에서는 `config/runtime.env`를 자동 생성합니다.
+- DB가 이미 있는데 키 파일이 없으면 자동 재생성하지 않고 실행을 중단합니다.
 - 최초 실행 전 운영자가 키를 생성/주입해야 합니다.
 - 키 변경은 데이터 마이그레이션(복호화 후 재암호화) 절차로 수행합니다.
 
@@ -128,6 +130,9 @@ build_windows.bat
 build_windows_installer.bat
 ```
 
+`build_windows_installer.bat`는 Inno Setup이 없을 때 빌드를 중단합니다.
+자동 설치를 허용하려면 `MANIM_AUTO_INSTALL_TOOLS=1` 설정 후 실행하세요.
+
 개발용 명령:
 
 ```bash
@@ -150,7 +155,7 @@ python -m pip install -e .[test,sqlcipher]
 2. 최초 키 생성
 
 ```bash
-PYTHONPATH=src python3 scripts/generate_keys.py
+PYTHONPATH=src python3 scripts/generate_keys.py --write-env .env.local --format shell
 ```
 
 3. 키 설정 (예시)

@@ -199,7 +199,13 @@ class CustomerRepository:
         )
         return [dict(row) for row in rows]
 
-    def search_customers(self, field: str, keyword: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    def search_customers(
+        self,
+        field: str,
+        keyword: str,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, Any]]:
         """Search active customers by a permitted text field."""
         allowed = {
             "id": "CAST(id AS TEXT)",
@@ -332,7 +338,9 @@ class CustomerRepository:
             (rrn_hash, customer_id),
         )
         if conflict:
-            raise ValueError("동일 주민번호의 활성 고객이 있어 복구할 수 없습니다.")
+            raise ValueError(
+                "동일 주민번호의 활성 고객이 있어 복구할 수 없습니다."
+            )
 
         cursor = self._pool.execute(
             """

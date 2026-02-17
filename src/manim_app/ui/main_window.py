@@ -7,7 +7,7 @@ from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Qt
+from PySide6.QtCore import QThreadPool, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -30,145 +30,17 @@ from PySide6.QtWidgets import (
 
 from manim_app.models.customer import CustomerCreate
 from manim_app.models.insurance import InsuranceCreate
+from manim_app.repositories.audit_repository import AuditRepository
 from manim_app.services.csv_import_service import CsvImportService
 from manim_app.services.customer_service import CustomerService
 from manim_app.services.insurance_service import InsuranceService
-from manim_app.repositories.audit_repository import AuditRepository
-
-
-class LoadSignals(QObject):
-    """Signals for background loading."""
-
-    done = Signal(list)
-    error = Signal(str)
-
-
-class ImportSignals(QObject):
-    """Signals for background CSV import."""
-
-    done = Signal(int, int, str)
-    error = Signal(str)
-
-
-class LoadCustomersTask(QRunnable):
-    """Background task for loading customer list."""
-
-    def __init__(self, customer_service: CustomerService, limit: int, offset: int):
-        super().__init__()
-        self.customer_service = customer_service
-        self.limit = limit
-        self.offset = offset
-        self.signals = LoadSignals()
-
-    def run(self) -> None:
-        try:
-            customers = self.customer_service.list_customers(limit=self.limit, offset=self.offset)
-            self.signals.done.emit(customers)
-        except Exception as error:  # pylint: disable=broad-except
-            self.signals.error.emit(str(error))
-
-
-class LoadInsurancesTask(QRunnable):
-    """Background task for loading insurance list."""
-
-    def __init__(self, insurance_service: InsuranceService, customer_id: int, limit: int, offset: int):
-        super().__init__()
-        self.insurance_service = insurance_service
-        self.customer_id = customer_id
-        self.limit = limit
-        self.offset = offset
-        self.signals = LoadSignals()
-
-    def run(self) -> None:
-        try:
-            insurances = self.insurance_service.list_insurances(
-                customer_id=self.customer_id,
-                limit=self.limit,
-                offset=self.offset,
-            )
-            self.signals.done.emit(insurances)
-        except Exception as error:  # pylint: disable=broad-except
-            self.signals.error.emit(str(error))
-
-
-class ImportCustomersCsvTask(QRunnable):
-    """Background task for importing customers from CSV."""
-
-    def __init__(self, csv_import_service: CsvImportService, file_path: str):
-        super().__init__()
-        self.csv_import_service = csv_import_service
-        self.file_path = file_path
-        self.signals = ImportSignals()
-
-    def run(self) -> None:
-        try:
-            result = self.csv_import_service.import_customers(self.file_path)
-            self.signals.done.emit(
-                result.created_count,
-                result.failed_count,
-                "\n".join(result.error_messages),
-            )
-        except Exception as error:  # pylint: disable=broad-except
-            self.signals.error.emit(str(error))
-
-
-class ImportInsurancesCsvTask(QRunnable):
-    """Background task for importing insurances from CSV."""
-
-    def __init__(self, csv_import_service: CsvImportService, file_path: str):
-        super().__init__()
-        self.csv_import_service = csv_import_service
-        self.file_path = file_path
-        self.signals = ImportSignals()
-
-    def run(self) -> None:
-        try:
-            result = self.csv_import_service.import_insurances(self.file_path)
-            self.signals.done.emit(
-                result.created_count,
-                result.failed_count,
-                "\n".join(result.error_messages),
-            )
-        except Exception as error:  # pylint: disable=broad-except
-            self.signals.error.emit(str(error))
-
-
-class LoadAuditLogsTask(QRunnable):
-    """Background task for loading audit logs."""
-
-    def __init__(
-        self,
-        audit_repo: AuditRepository,
-        limit: int,
-        action: str | None,
-        entity: str | None,
-        keyword: str | None,
-        date_from: str | None,
-        date_to: str | None,
-    ):
-        super().__init__()
-        self.audit_repo = audit_repo
-        self.limit = limit
-        self.action = action
-        self.entity = entity
-        self.keyword = keyword
-        self.date_from = date_from
-        self.date_to = date_to
-        self.signals = LoadSignals()
-
-    def run(self) -> None:
-        try:
-            logs = self.audit_repo.list_logs(
-                limit=self.limit,
-                action=self.action,
-                entity=self.entity,
-                keyword=self.keyword,
-                date_from=self.date_from,
-                date_to=self.date_to,
-            )
-            self.signals.done.emit(logs)
-        except Exception as error:  # pylint: disable=broad-except
-            self.signals.error.emit(str(error))
+from manim_app.ui.tasks import (
+    ImportCustomersCsvTask,
+    ImportInsurancesCsvTask,
+    LoadAuditLogsTask,
+    LoadCustomersTask,
+    LoadInsurancesTask,
+)
 
 
 class MainWindow(QMainWindow):
@@ -303,7 +175,9 @@ class MainWindow(QMainWindow):
         self.insurance_customer_selector = QComboBox()
         self.insurance_customer_selector.setEditable(True)
         self.insurance_customer_selector.lineEdit().setPlaceholderText("고객명/ID 검색 선택")
-        self.insurance_customer_selector.currentIndexChanged.connect(self._on_customer_selector_changed)
+        self.insurance_customer_selector.currentIndexChanged.connect(
+            self._on_customer_selector_changed
+        )
 
         self.contract_date_input = QLineEdit()
         self.contract_date_input.setPlaceholderText("YYYY-MM-DD")
@@ -366,7 +240,16 @@ class MainWindow(QMainWindow):
 
         self.insurances_table = QTableWidget(0, 8)
         self.insurances_table.setHorizontalHeaderLabels(
-            ["ID", "고객ID", "계약일자", "보험사", "증권번호", "상품명", "보험료", "결제일"]
+            [
+                "ID",
+                "고객ID",
+                "계약일자",
+                "보험사",
+                "증권번호",
+                "상품명",
+                "보험료",
+                "결제일",
+            ]
         )
         self.insurances_table.cellClicked.connect(self._on_insurance_row_selected)
 
@@ -424,7 +307,16 @@ class MainWindow(QMainWindow):
 
         self.query_insurances_table = QTableWidget(0, 8)
         self.query_insurances_table.setHorizontalHeaderLabels(
-            ["ID", "고객ID", "계약일자", "보험사", "증권번호", "상품명", "보험료", "결제일"]
+            [
+                "ID",
+                "고객ID",
+                "계약일자",
+                "보험사",
+                "증권번호",
+                "상품명",
+                "보험료",
+                "결제일",
+            ]
         )
 
         layout.addLayout(customer_query_row)
@@ -457,7 +349,7 @@ class MainWindow(QMainWindow):
         purge_button = QPushButton("DB 전체 비우기 (soft delete 포함)")
         purge_button.clicked.connect(self.purge_all_data)
 
-        layout.addWidget(QLabel("영구 삭제는 되돌릴 수 없습니다.")) 
+        layout.addWidget(QLabel("영구 삭제는 되돌릴 수 없습니다."))
         layout.addLayout(customer_row)
         layout.addLayout(insurance_row)
         layout.addWidget(purge_button)
@@ -560,9 +452,13 @@ class MainWindow(QMainWindow):
 
 <h3>CSV 형식</h3>
 <p><b>고객 CSV 헤더</b><br>
-<code>이름,주민번호,연락처,주소,직업,카드번호,결제계좌,보험금수령계좌,병력,비고</code></p>
+<code>이름,주민번호,연락처,주소,직업,카드번호,<br>
+결제계좌,보험금수령계좌,병력,비고</code>
+</p>
 <p><b>보험 CSV 헤더</b><br>
-<code>고객ID,계약일자,보험사,증권번호,상품명,보험료,피보험자,결제일,수익자</code></p>
+<code>고객ID,계약일자,보험사,증권번호,상품명,<br>
+보험료,피보험자,결제일,수익자</code>
+</p>
 
 <h3>입력 규칙</h3>
 <ul>
@@ -628,11 +524,16 @@ class MainWindow(QMainWindow):
         try:
             premium_value = Decimal(premium_raw)
         except InvalidOperation as error:
-            raise ValueError("보험료는 숫자로 입력하세요. 예: 50000 또는 50000.50") from error
+            raise ValueError(
+                "보험료는 숫자로 입력하세요. 예: 50000 또는 50000.50"
+            ) from error
 
         return InsuranceCreate(
             customer_id=int(customer_id_raw),
-            contract_date=datetime.strptime(self.contract_date_input.text().strip(), "%Y-%m-%d").date(),
+            contract_date=datetime.strptime(
+                self.contract_date_input.text().strip(),
+                "%Y-%m-%d",
+            ).date(),
             company=self.company_input.text(),
             policy_number=self.policy_number_input.text(),
             product_name=self.product_name_input.text(),
@@ -644,8 +545,14 @@ class MainWindow(QMainWindow):
 
     def create_customer(self) -> None:
         try:
-            customer_id = self.customer_service.create_customer(self._customer_payload_from_form())
-            QMessageBox.information(self, "완료", f"고객이 등록되었습니다. ID={customer_id}")
+            customer_id = self.customer_service.create_customer(
+                self._customer_payload_from_form()
+            )
+            QMessageBox.information(
+                self,
+                "완료",
+                f"고객이 등록되었습니다. ID={customer_id}",
+            )
             self.customer_id_input.setText(str(customer_id))
             self.clear_customer_form()
             self.refresh_customers()
@@ -686,8 +593,14 @@ class MainWindow(QMainWindow):
 
     def create_insurance(self) -> None:
         try:
-            insurance_id = self.insurance_service.create_insurance(self._insurance_payload_from_form())
-            QMessageBox.information(self, "완료", f"보험이 등록되었습니다. ID={insurance_id}")
+            insurance_id = self.insurance_service.create_insurance(
+                self._insurance_payload_from_form()
+            )
+            QMessageBox.information(
+                self,
+                "완료",
+                f"보험이 등록되었습니다. ID={insurance_id}",
+            )
             self.insurance_id_input.setText(str(insurance_id))
             self.clear_insurance_form(keep_customer_id=True)
             self.refresh_insurances()
@@ -698,7 +611,10 @@ class MainWindow(QMainWindow):
     def update_insurance(self) -> None:
         try:
             insurance_id = self._selected_insurance_id()
-            self.insurance_service.update_insurance(insurance_id, self._insurance_payload_from_form())
+            self.insurance_service.update_insurance(
+                insurance_id,
+                self._insurance_payload_from_form(),
+            )
             QMessageBox.information(self, "완료", f"보험(ID={insurance_id}) 수정 완료")
             self.refresh_insurances()
             self.refresh_audit_logs()
@@ -726,7 +642,11 @@ class MainWindow(QMainWindow):
             if confirm != QMessageBox.StandardButton.Yes:
                 return
             self.customer_service.hard_delete_customer(customer_id)
-            QMessageBox.information(self, "완료", f"고객(ID={customer_id}) 영구 삭제 완료")
+            QMessageBox.information(
+                self,
+                "완료",
+                f"고객(ID={customer_id}) 영구 삭제 완료",
+            )
             self.refresh_customers()
             self.refresh_insurances()
             self.refresh_audit_logs()
@@ -744,7 +664,11 @@ class MainWindow(QMainWindow):
             if confirm != QMessageBox.StandardButton.Yes:
                 return
             self.insurance_service.hard_delete_insurance(insurance_id)
-            QMessageBox.information(self, "완료", f"보험(ID={insurance_id}) 영구 삭제 완료")
+            QMessageBox.information(
+                self,
+                "완료",
+                f"보험(ID={insurance_id}) 영구 삭제 완료",
+            )
             self.refresh_insurances()
             self.refresh_audit_logs()
         except Exception as error:  # pylint: disable=broad-except
@@ -790,7 +714,12 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "오류", "고객 ID는 숫자여야 합니다.")
             return
 
-        task = LoadInsurancesTask(self.insurance_service, customer_id, self.insurance_limit, self.insurance_offset)
+        task = LoadInsurancesTask(
+            self.insurance_service,
+            customer_id,
+            self.insurance_limit,
+            self.insurance_offset,
+        )
         task.signals.done.connect(self._render_insurances)
         task.signals.error.connect(lambda message: QMessageBox.critical(self, "오류", message))
         self.thread_pool.start(task)
@@ -810,7 +739,9 @@ class MainWindow(QMainWindow):
             date_to=date_to,
         )
         task.signals.done.connect(self._render_audit_logs)
-        task.signals.error.connect(lambda message: QMessageBox.critical(self, "이력 오류", message))
+        task.signals.error.connect(
+            lambda message: QMessageBox.critical(self, "이력 오류", message)
+        )
         self.thread_pool.start(task)
 
     def _on_period_changed(self, _index: int) -> None:
@@ -865,26 +796,45 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "검색 오류", str(error))
 
     def import_customers_from_csv(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(self, "고객 CSV 선택", "", "CSV Files (*.csv)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "고객 CSV 선택",
+            "",
+            "CSV Files (*.csv)",
+        )
         if not file_path:
             return
 
         task = ImportCustomersCsvTask(self.csv_import_service, file_path)
         task.signals.done.connect(self._show_customer_import_result)
-        task.signals.error.connect(lambda message: QMessageBox.critical(self, "CSV 오류", message))
+        task.signals.error.connect(
+            lambda message: QMessageBox.critical(self, "CSV 오류", message)
+        )
         self.thread_pool.start(task)
 
     def import_insurances_from_csv(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(self, "보험 CSV 선택", "", "CSV Files (*.csv)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "보험 CSV 선택",
+            "",
+            "CSV Files (*.csv)",
+        )
         if not file_path:
             return
 
         task = ImportInsurancesCsvTask(self.csv_import_service, file_path)
         task.signals.done.connect(self._show_insurance_import_result)
-        task.signals.error.connect(lambda message: QMessageBox.critical(self, "CSV 오류", message))
+        task.signals.error.connect(
+            lambda message: QMessageBox.critical(self, "CSV 오류", message)
+        )
         self.thread_pool.start(task)
 
-    def _show_customer_import_result(self, created_count: int, failed_count: int, details: str) -> None:
+    def _show_customer_import_result(
+        self,
+        created_count: int,
+        failed_count: int,
+        details: str,
+    ) -> None:
         message = f"고객 CSV 등록 완료\n성공: {created_count}건\n실패: {failed_count}건"
         if details:
             message += f"\n\n실패 상세(최대 10건)\n{details}"
@@ -892,7 +842,12 @@ class MainWindow(QMainWindow):
         self.refresh_customers()
         self.refresh_audit_logs()
 
-    def _show_insurance_import_result(self, created_count: int, failed_count: int, details: str) -> None:
+    def _show_insurance_import_result(
+        self,
+        created_count: int,
+        failed_count: int,
+        details: str,
+    ) -> None:
         message = f"보험 CSV 등록 완료\n성공: {created_count}건\n실패: {failed_count}건"
         if details:
             message += f"\n\n실패 상세(최대 10건)\n{details}"
@@ -958,7 +913,10 @@ class MainWindow(QMainWindow):
         self.insurance_customer_selector.clear()
         self.insurance_customer_selector.addItem("고객 선택", "")
         for customer in customers:
-            self.insurance_customer_selector.addItem(f"{customer.id} - {customer.name}", str(customer.id))
+            self.insurance_customer_selector.addItem(
+                f"{customer.id} - {customer.name}",
+                str(customer.id),
+            )
         self.insurance_customer_selector.blockSignals(False)
         if current_id:
             self._sync_customer_selector_by_id(current_id)
@@ -1000,7 +958,12 @@ class MainWindow(QMainWindow):
         if not self._audit_rows:
             QMessageBox.information(self, "안내", "내보낼 이력 데이터가 없습니다.")
             return
-        file_path, _ = QFileDialog.getSaveFileName(self, "이력 CSV 저장", "audit_logs.csv", "CSV Files (*.csv)")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "이력 CSV 저장",
+            "audit_logs.csv",
+            "CSV Files (*.csv)",
+        )
         if not file_path:
             return
         try:

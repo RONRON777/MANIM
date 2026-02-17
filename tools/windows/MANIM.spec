@@ -1,8 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+import os
 
 block_cipher = None
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_spec_file = globals().get("__file__")
+if _spec_file:
+    PROJECT_ROOT = Path(_spec_file).resolve().parents[2]
+else:
+    # Some PyInstaller executions do not define __file__ in spec scope.
+    PROJECT_ROOT = Path(os.getcwd()).resolve()
 ENTRYPOINT = PROJECT_ROOT / 'src' / 'manim_app' / 'main.py'
 
 

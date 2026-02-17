@@ -88,6 +88,7 @@
 ```
 
 `start.sh`는 `setup + keys + app`을 한 번에 처리하며, 실패 시 이유를 한국어로 안내합니다.
+macOS에서 더블클릭 실행은 `start.command`를 사용합니다.
 
 Windows에서는 아래를 사용합니다.
 
@@ -116,6 +117,15 @@ powershell -ExecutionPolicy Bypass -File tools/windows/build.ps1 -Installer
 ```bat
 tools\windows\build.bat
 tools\windows\build.bat installer
+```
+
+Windows 빌드 스크립트는 가상환경(`.venv`, `.build_venv`)을 만들지 않고
+시스템 Python + `python -m pip` 기준으로 동작합니다.
+더블클릭용 파일:
+
+```bat
+build_windows.bat
+build_windows_installer.bat
 ```
 
 개발용 명령:

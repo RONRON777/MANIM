@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $Root
-$BootstrapPython = $null
+$PythonCommand = $null
 
 function Resolve-PythonCommand {
   $py = Get-Command py -ErrorAction SilentlyContinue
@@ -19,21 +19,18 @@ function Resolve-PythonCommand {
   throw 'Python 실행 파일을 찾지 못했습니다. Python 3를 설치하고 다시 시도하세요.'
 }
 
-$BootstrapPython = Resolve-PythonCommand
+$PythonCommand = Resolve-PythonCommand
 
-Write-Host '[1/4] Create build venv'
-if (-not (Test-Path '.build_venv\Scripts\python.exe')) {
-  & $BootstrapPython -m venv .build_venv
-}
-
-$Py = Join-Path $Root '.build_venv\Scripts\python.exe'
+Write-Host '[1/4] Check Python/pip'
+& $PythonCommand --version
+& $PythonCommand -m pip --version
 
 Write-Host '[2/4] Install build dependencies'
-& $Py -m pip install --upgrade pip
-& $Py -m pip install pyinstaller PySide6 PyYAML cryptography
+& $PythonCommand -m pip install --user --upgrade pip
+& $PythonCommand -m pip install --user pyinstaller PySide6 PyYAML cryptography
 
 Write-Host '[3/4] Build MANIM.exe'
-& $Py -m PyInstaller --noconfirm --clean tools\windows\MANIM.spec
+& $PythonCommand -m PyInstaller --noconfirm --clean tools\windows\MANIM.spec
 
 if (-not (Test-Path 'dist\MANIM')) {
   New-Item -ItemType Directory -Path 'dist\MANIM' | Out-Null

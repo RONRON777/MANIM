@@ -11,6 +11,7 @@ pushd "%ROOT_DIR%" >nul
 set SPEC_PATH=%ROOT_DIR%\tools\windows\MANIM.spec
 set DIST_DIR=%ROOT_DIR%\dist\MANIM
 set DIST_CFG_DIR=%DIST_DIR%\config
+set DIST_ROOT_CFG_DIR=%ROOT_DIR%\dist\config
 set DIST_EXE=%ROOT_DIR%\dist\MANIM.exe
 set DIST_PACKED_EXE=%DIST_DIR%\MANIM.exe
 set CFG_FILE=%ROOT_DIR%\config\security.yaml
@@ -45,8 +46,10 @@ echo [3/4] Build MANIM.exe
 
 if not exist "%DIST_DIR%" mkdir "%DIST_DIR%"
 if not exist "%DIST_CFG_DIR%" mkdir "%DIST_CFG_DIR%"
+if not exist "%DIST_ROOT_CFG_DIR%" mkdir "%DIST_ROOT_CFG_DIR%"
 copy /Y "%DIST_EXE%" "%DIST_PACKED_EXE%" >nul || goto FAIL
 copy /Y "%CFG_FILE%" "%DIST_CFG_DIR%\security.yaml" >nul || goto FAIL
+copy /Y "%CFG_FILE%" "%DIST_ROOT_CFG_DIR%\security.yaml" >nul || goto FAIL
 copy /Y "%README_FILE%" "%README_OUT%" >nul || goto FAIL
 echo Output: %DIST_PACKED_EXE%
 

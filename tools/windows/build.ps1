@@ -11,6 +11,7 @@ Set-Location $Root
 $SpecPath = Join-Path $Root 'tools\windows\MANIM.spec'
 $DistDir = Join-Path $Root 'dist\MANIM'
 $DistConfigDir = Join-Path $DistDir 'config'
+$DistRootConfigDir = Join-Path $Root 'dist\config'
 $DistExe = Join-Path $Root 'dist\MANIM.exe'
 $DistPackedExe = Join-Path $DistDir 'MANIM.exe'
 $SecurityConfig = Join-Path $Root 'config\security.yaml'
@@ -85,8 +86,12 @@ if (-not (Test-Path $DistDir)) {
 if (-not (Test-Path $DistConfigDir)) {
   New-Item -ItemType Directory -Path $DistConfigDir | Out-Null
 }
+if (-not (Test-Path $DistRootConfigDir)) {
+  New-Item -ItemType Directory -Path $DistRootConfigDir | Out-Null
+}
 Copy-Item $DistExe $DistPackedExe -Force
 Copy-Item $SecurityConfig (Join-Path $DistConfigDir 'security.yaml') -Force
+Copy-Item $SecurityConfig (Join-Path $DistRootConfigDir 'security.yaml') -Force
 Copy-Item $ReadmeFile $ReadmeOut -Force
 
 Write-Host "Output: $DistPackedExe"

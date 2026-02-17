@@ -20,6 +20,7 @@ if "%PY_CMD%"=="" (
 
 echo [1/4] Check Python/pip
 %PY_CMD% --version || goto FAIL
+%PY_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)" || goto PYVER_FAIL
 %PY_CMD% -m pip --version || goto FAIL
 
 echo [2/4] Install build dependencies
@@ -49,6 +50,16 @@ if /I "%~1"=="installer" (
 )
 
 set EXIT_CODE=0
+goto END
+
+:PYVER_FAIL
+echo [실패] Python 3.9 이상이 필요합니다.
+where py >nul 2>&1
+if not errorlevel 1 (
+  echo [안내] 현재 py 런처에서 인식된 Python 목록:
+  py -0p
+)
+set EXIT_CODE=1
 goto END
 
 :FAIL

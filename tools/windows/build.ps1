@@ -10,7 +10,7 @@ $PythonCommand = $null
 function Resolve-PythonCommand {
   $py = Get-Command py -ErrorAction SilentlyContinue
   if ($py) {
-    return @('py', '-3')
+    return @('py')
   }
   $python = Get-Command python -ErrorAction SilentlyContinue
   if ($python) {
@@ -19,7 +19,21 @@ function Resolve-PythonCommand {
   throw 'Python 실행 파일을 찾지 못했습니다. Python 3를 설치하고 다시 시도하세요.'
 }
 
+function Assert-PythonVersion {
+  & $PythonCommand -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)"
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host '[안내] Python 3.9 이상이 필요합니다.'
+    $py = Get-Command py -ErrorAction SilentlyContinue
+    if ($py) {
+      Write-Host '[안내] 현재 py 런처에서 인식된 Python 목록:'
+      & py -0p
+    }
+    throw '지원되지 않는 Python 버전입니다. Python 3.9+를 설치/기본값으로 설정하세요.'
+  }
+}
+
 $PythonCommand = Resolve-PythonCommand
+Assert-PythonVersion
 
 Write-Host '[1/4] Check Python/pip'
 & $PythonCommand --version

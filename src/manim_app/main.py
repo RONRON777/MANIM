@@ -22,6 +22,7 @@ def run() -> None:
         container.customer_service,
         container.insurance_service,
         container.csv_import_service,
+        container.audit_repo,
     )
     window.show()
     sys.exit(app.exec())

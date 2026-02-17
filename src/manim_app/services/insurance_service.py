@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from manim_app.core.validation import (
     validate_contract_date,
     validate_payment_day,
@@ -66,7 +68,13 @@ class InsuranceService:
         """Validate, persist, and audit insurance creation."""
         validated = self._validate(payload)
         insurance_id = self._insurance_repo.create_insurance(validated)
-        self._audit_repo.add_log("CREATE", "insurance", insurance_id, "insurance created")
+        after = self._snapshot(insurance_id)
+        self._audit_repo.add_log(
+            "CREATE",
+            "insurance",
+            insurance_id,
+            json.dumps({"event": "insurance created", "after": after}, ensure_ascii=False),
+        )
         return insurance_id
 
     def get_insurance(self, insurance_id: int) -> InsuranceView:
@@ -99,15 +107,69 @@ class InsuranceService:
 
     def update_insurance(self, insurance_id: int, payload: InsuranceCreate) -> None:
         """Update one insurance and write audit log."""
+        before = self._snapshot(insurance_id)
         validated = self._validate(payload)
         updated = self._insurance_repo.update_insurance(insurance_id, validated)
         if updated == 0:
             raise ValueError("수정할 보험 정보를 찾을 수 없습니다.")
-        self._audit_repo.add_log("UPDATE", "insurance", insurance_id, "insurance updated")
+        after = self._snapshot(insurance_id)
+        self._audit_repo.add_log(
+            "UPDATE",
+            "insurance",
+            insurance_id,
+            json.dumps(
+                {
+                    "event": "insurance updated",
+                    "changes": self._diff(before, after),
+                },
+                ensure_ascii=False,
+            ),
+        )
 
     def delete_insurance(self, insurance_id: int) -> None:
         """Soft-delete one insurance and write audit log."""
+        before = self._snapshot(insurance_id)
         deleted = self._insurance_repo.soft_delete_insurance(insurance_id)
         if deleted == 0:
             raise ValueError("삭제할 보험 정보를 찾을 수 없습니다.")
-        self._audit_repo.add_log("DELETE", "insurance", insurance_id, "insurance soft-deleted")
+        self._audit_repo.add_log(
+            "DELETE",
+            "insurance",
+            insurance_id,
+            json.dumps({"event": "insurance soft-deleted", "before": before}, ensure_ascii=False),
+        )
+
+    def hard_delete_insurance(self, insurance_id: int) -> None:
+        """Hard-delete one insurance."""
+        deleted = self._insurance_repo.hard_delete_insurance(insurance_id)
+        if deleted == 0:
+            raise ValueError("영구 삭제할 보험 정보를 찾을 수 없습니다.")
+        self._audit_repo.add_log("DELETE", "insurance", insurance_id, "insurance hard-deleted")
+
+    def _snapshot(self, insurance_id: int) -> dict[str, str]:
+        """Build a snapshot for insurance audit logs."""
+        row = self._insurance_repo.get_insurance(insurance_id)
+        if not row:
+            return {}
+        return {
+            "customer_id": str(row["customer_id"]),
+            "contract_date": row["contract_date"] or "",
+            "company": row["company"] or "",
+            "policy_number": row["policy_number"] or "",
+            "product_name": row["product_name"] or "",
+            "premium": row["premium"] or "",
+            "insured_person": row["insured_person"] or "",
+            "payment_day": str(row["payment_day"] or ""),
+            "beneficiary": row["beneficiary"] or "",
+        }
+
+    @staticmethod
+    def _diff(before: dict[str, str], after: dict[str, str]) -> dict[str, dict[str, str]]:
+        """Return changed fields for audit logs."""
+        changes: dict[str, dict[str, str]] = {}
+        for key in sorted(set(before) | set(after)):
+            old = before.get(key, "")
+            new = after.get(key, "")
+            if old != new:
+                changes[key] = {"before": old, "after": new}
+        return changes

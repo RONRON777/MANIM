@@ -177,3 +177,30 @@ class InsuranceRepository:
             (insurance_id,),
         )
         return cursor.rowcount
+
+    def hard_delete_insurance(self, insurance_id: int) -> int:
+        """Hard-delete insurance regardless of soft-delete status."""
+        cursor = self._pool.execute(
+            """
+            DELETE FROM insurances
+            WHERE id = ?
+            """,
+            (insurance_id,),
+        )
+        return cursor.rowcount
+
+    def hard_delete_by_customer(self, customer_id: int) -> int:
+        """Hard-delete all insurances by customer id."""
+        cursor = self._pool.execute(
+            """
+            DELETE FROM insurances
+            WHERE customer_id = ?
+            """,
+            (customer_id,),
+        )
+        return cursor.rowcount
+
+    def purge_all_insurances(self) -> None:
+        """Delete all insurance rows and reset sequence."""
+        self._pool.execute("DELETE FROM insurances")
+        self._pool.execute("DELETE FROM sqlite_sequence WHERE name = 'insurances'")

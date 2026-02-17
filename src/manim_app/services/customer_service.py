@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from manim_app.core.crypto import mask_account, mask_rrn
 from manim_app.core.validation import (
     validate_optional_number,
@@ -59,7 +61,13 @@ class CustomerService:
         """Validate, persist, and audit customer creation."""
         normalized = self._validate(payload)
         customer_id = self._customer_repo.create_customer(normalized)
-        self._audit_repo.add_log("CREATE", "customer", customer_id, "customer created")
+        after = self._snapshot(customer_id)
+        self._audit_repo.add_log(
+            "CREATE",
+            "customer",
+            customer_id,
+            json.dumps({"event": "customer created", "after": after}, ensure_ascii=False),
+        )
         return customer_id
 
     def get_customer(self, customer_id: int, reveal_sensitive: bool = False) -> CustomerView:
@@ -151,15 +159,92 @@ class CustomerService:
 
     def update_customer(self, customer_id: int, payload: CustomerCreate) -> None:
         """Update customer and write audit log."""
+        before = self._snapshot(customer_id)
         normalized = self._validate(payload)
         updated = self._customer_repo.update_customer(customer_id, normalized)
         if updated == 0:
             raise ValueError("수정할 고객 정보를 찾을 수 없습니다.")
-        self._audit_repo.add_log("UPDATE", "customer", customer_id, "customer updated")
+        after = self._snapshot(customer_id)
+        self._audit_repo.add_log(
+            "UPDATE",
+            "customer",
+            customer_id,
+            json.dumps(
+                {
+                    "event": "customer updated",
+                    "changes": self._diff(before, after),
+                },
+                ensure_ascii=False,
+            ),
+        )
 
     def delete_customer(self, customer_id: int) -> None:
         """Soft-delete customer and write audit log."""
+        before = self._snapshot(customer_id)
         deleted = self._customer_repo.soft_delete_customer(customer_id)
         if deleted == 0:
             raise ValueError("삭제할 고객 정보를 찾을 수 없습니다.")
-        self._audit_repo.add_log("DELETE", "customer", customer_id, "customer soft-deleted")
+        self._audit_repo.add_log(
+            "DELETE",
+            "customer",
+            customer_id,
+            json.dumps({"event": "customer soft-deleted", "before": before}, ensure_ascii=False),
+        )
+
+    def restore_customer(self, customer_id: int) -> None:
+        """Restore a soft-deleted customer and write audit log."""
+        restored = self._customer_repo.restore_customer(customer_id)
+        if restored == 0:
+            raise ValueError("복구할 고객 정보를 찾을 수 없습니다.")
+        after = self._snapshot(customer_id)
+        self._audit_repo.add_log(
+            "UPDATE",
+            "customer",
+            customer_id,
+            json.dumps({"event": "customer restored", "after": after}, ensure_ascii=False),
+        )
+
+    def hard_delete_customer(self, customer_id: int) -> None:
+        """Hard-delete customer and related records."""
+        deleted = self._customer_repo.hard_delete_customer(customer_id)
+        if deleted == 0:
+            raise ValueError("영구 삭제할 고객 정보를 찾을 수 없습니다.")
+        self._audit_repo.add_log("DELETE", "customer", customer_id, "customer hard-deleted")
+
+    def purge_all_customers(self) -> None:
+        """Delete all customer and insurance rows."""
+        self._customer_repo.purge_all_customers()
+        self._audit_repo.add_log("DELETE", "customer", None, "all customers purged")
+
+    def _snapshot(self, customer_id: int) -> dict[str, str]:
+        """Build a masked snapshot for audit logs."""
+        row = self._customer_repo.get_customer(customer_id)
+        if not row:
+            return {}
+        rrn = self._customer_repo.decrypt_rrn(row["rrn_encrypted"])
+        card = self._customer_repo.decrypt_account(row["payment_card_encrypted"])
+        account = self._customer_repo.decrypt_account(row["payment_account_encrypted"])
+        payout = self._customer_repo.decrypt_account(row["payout_account_encrypted"])
+        return {
+            "name": row["name"] or "",
+            "rrn": mask_rrn(rrn),
+            "phone": row["phone"] or "",
+            "address": row["address"] or "",
+            "job": row["job"] or "",
+            "payment_card": mask_account(card),
+            "payment_account": mask_account(account),
+            "payout_account": mask_account(payout),
+            "medical_history": row["medical_history"] or "",
+            "note": row["note"] or "",
+        }
+
+    @staticmethod
+    def _diff(before: dict[str, str], after: dict[str, str]) -> dict[str, dict[str, str]]:
+        """Return changed fields for audit logs."""
+        changes: dict[str, dict[str, str]] = {}
+        for key in sorted(set(before) | set(after)):
+            old = before.get(key, "")
+            new = after.get(key, "")
+            if old != new:
+                changes[key] = {"before": old, "after": new}
+        return changes

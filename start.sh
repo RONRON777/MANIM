@@ -93,6 +93,18 @@ run_app() {
       fail "DB 암호화 모듈 설정 문제입니다." "config/security.yaml 의 allow_sqlite_fallback 값을 true 로 유지해주세요."
     fi
 
+    if grep -q "Abort trap: 6" "$TMP_DIR/start_app.log" || \
+       grep -q "Connection Invalid error for service com.apple.hiservices-xpcservice" "$TMP_DIR/start_app.log"; then
+      fail "화면(GUI) 세션 연결 문제로 실행되지 않았습니다." \
+           "원격 SSH/제한된 터미널이 아닌, Mac 로컬 데스크톱 터미널에서 실행해주세요."
+    fi
+
+    if grep -q "Incompatible processor" "$TMP_DIR/start_app.log" || \
+       grep -q "requires the following features:.*neon" "$TMP_DIR/start_app.log"; then
+      fail "PySide6 아키텍처가 현재 환경과 맞지 않습니다." \
+           "가상환경 재생성 후 start.sh를 다시 실행하거나, PySide6 6.10.2를 재설치하세요."
+    fi
+
     fail "앱 실행 중 오류가 발생했습니다." "로그 파일: .tmp/start_app.log"
   fi
 }

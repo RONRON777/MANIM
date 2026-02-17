@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 from typing import Any
 
 from manim_app.core.crypto import CryptoService
@@ -23,37 +24,106 @@ class CustomerRepository:
 
     def create_customer(self, payload: CustomerCreate) -> int:
         """Insert customer with encrypted sensitive fields and return new id."""
-        cursor = self._pool.execute(
-            """
-            INSERT INTO customers (
-                name,
-                rrn_encrypted,
-                rrn_hash,
-                phone,
-                address,
-                job,
-                payment_card_encrypted,
-                payment_account_encrypted,
-                payout_account_encrypted,
-                medical_history,
-                note
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                payload.name,
-                self._crypto.encrypt_text(payload.rrn),
-                self._hash_rrn(payload.rrn),
-                payload.phone,
-                payload.address,
-                payload.job,
-                self._crypto.encrypt_text(payload.payment_card),
-                self._crypto.encrypt_text(payload.payment_account),
-                self._crypto.encrypt_text(payload.payout_account),
-                payload.medical_history,
-                payload.note,
-            ),
-        )
-        return int(cursor.lastrowid)
+        rrn_hash = self._hash_rrn(payload.rrn)
+        try:
+            cursor = self._pool.execute(
+                """
+                INSERT INTO customers (
+                    name,
+                    rrn_encrypted,
+                    rrn_hash,
+                    phone,
+                    address,
+                    job,
+                    payment_card_encrypted,
+                    payment_account_encrypted,
+                    payout_account_encrypted,
+                    medical_history,
+                    note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.name,
+                    self._crypto.encrypt_text(payload.rrn),
+                    rrn_hash,
+                    payload.phone,
+                    payload.address,
+                    payload.job,
+                    self._crypto.encrypt_text(payload.payment_card),
+                    self._crypto.encrypt_text(payload.payment_account),
+                    self._crypto.encrypt_text(payload.payout_account),
+                    payload.medical_history,
+                    payload.note,
+                ),
+            )
+            return int(cursor.lastrowid)
+        except sqlite3.IntegrityError as error:
+            if "customers.rrn_hash" not in str(error):
+                raise
+
+            active_row = self._pool.fetchone(
+                """
+                SELECT id
+                FROM customers
+                WHERE rrn_hash = ? AND deleted_at IS NULL
+                LIMIT 1
+                """,
+                (rrn_hash,),
+            )
+            if active_row:
+                raise ValueError("이미 등록된 주민번호입니다.") from error
+
+            deleted_row = self._pool.fetchone(
+                """
+                SELECT id
+                FROM customers
+                WHERE rrn_hash = ? AND deleted_at IS NOT NULL
+                LIMIT 1
+                """,
+                (rrn_hash,),
+            )
+            if deleted_row:
+                self._pool.execute(
+                    """
+                    UPDATE customers
+                    SET rrn_hash = rrn_hash || ':deleted:' || id
+                    WHERE id = ?
+                    """,
+                    (deleted_row["id"],),
+                )
+                cursor = self._pool.execute(
+                    """
+                    INSERT INTO customers (
+                        name,
+                        rrn_encrypted,
+                        rrn_hash,
+                        phone,
+                        address,
+                        job,
+                        payment_card_encrypted,
+                        payment_account_encrypted,
+                        payout_account_encrypted,
+                        medical_history,
+                        note
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        payload.name,
+                        self._crypto.encrypt_text(payload.rrn),
+                        rrn_hash,
+                        payload.phone,
+                        payload.address,
+                        payload.job,
+                        self._crypto.encrypt_text(payload.payment_card),
+                        self._crypto.encrypt_text(payload.payment_account),
+                        self._crypto.encrypt_text(payload.payout_account),
+                        payload.medical_history,
+                        payload.note,
+                    ),
+                )
+                return int(cursor.lastrowid)
+
+            raise ValueError("주민번호 중복이 감지되었습니다.") from error
 
     def decrypt_rrn(self, encrypted_rrn: bytes) -> str:
         """Decrypt stored RRN bytes."""
@@ -167,40 +237,45 @@ class CustomerRepository:
 
     def update_customer(self, customer_id: int, payload: CustomerCreate) -> int:
         """Update active customer and return affected row count."""
-        cursor = self._pool.execute(
-            """
-            UPDATE customers
-            SET
-                name = ?,
-                rrn_encrypted = ?,
-                rrn_hash = ?,
-                phone = ?,
-                address = ?,
-                job = ?,
-                payment_card_encrypted = ?,
-                payment_account_encrypted = ?,
-                payout_account_encrypted = ?,
-                medical_history = ?,
-                note = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND deleted_at IS NULL
-            """,
-            (
-                payload.name,
-                self._crypto.encrypt_text(payload.rrn),
-                self._hash_rrn(payload.rrn),
-                payload.phone,
-                payload.address,
-                payload.job,
-                self._crypto.encrypt_text(payload.payment_card),
-                self._crypto.encrypt_text(payload.payment_account),
-                self._crypto.encrypt_text(payload.payout_account),
-                payload.medical_history,
-                payload.note,
-                customer_id,
-            ),
-        )
-        return cursor.rowcount
+        try:
+            cursor = self._pool.execute(
+                """
+                UPDATE customers
+                SET
+                    name = ?,
+                    rrn_encrypted = ?,
+                    rrn_hash = ?,
+                    phone = ?,
+                    address = ?,
+                    job = ?,
+                    payment_card_encrypted = ?,
+                    payment_account_encrypted = ?,
+                    payout_account_encrypted = ?,
+                    medical_history = ?,
+                    note = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND deleted_at IS NULL
+                """,
+                (
+                    payload.name,
+                    self._crypto.encrypt_text(payload.rrn),
+                    self._hash_rrn(payload.rrn),
+                    payload.phone,
+                    payload.address,
+                    payload.job,
+                    self._crypto.encrypt_text(payload.payment_card),
+                    self._crypto.encrypt_text(payload.payment_account),
+                    self._crypto.encrypt_text(payload.payout_account),
+                    payload.medical_history,
+                    payload.note,
+                    customer_id,
+                ),
+            )
+            return cursor.rowcount
+        except sqlite3.IntegrityError as error:
+            if "customers.rrn_hash" in str(error):
+                raise ValueError("이미 등록된 주민번호입니다.") from error
+            raise
 
     def soft_delete_customer(self, customer_id: int) -> int:
         """Soft-delete customer if they do not have active insurances."""
@@ -220,9 +295,78 @@ class CustomerRepository:
             """
             UPDATE customers
             SET deleted_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
+                updated_at = CURRENT_TIMESTAMP,
+                rrn_hash = rrn_hash || ':deleted:' || id
             WHERE id = ? AND deleted_at IS NULL
             """,
             (customer_id,),
         )
         return cursor.rowcount
+
+    def restore_customer(self, customer_id: int) -> int:
+        """Restore a soft-deleted customer when no active RRN conflict exists."""
+        row = self._pool.fetchone(
+            """
+            SELECT id, rrn_encrypted, deleted_at
+            FROM customers
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        if not row:
+            return 0
+        if row["deleted_at"] is None:
+            return 0
+
+        rrn = self._crypto.decrypt_text(row["rrn_encrypted"])
+        rrn_hash = self._hash_rrn(rrn)
+
+        conflict = self._pool.fetchone(
+            """
+            SELECT id
+            FROM customers
+            WHERE rrn_hash = ? AND deleted_at IS NULL AND id != ?
+            LIMIT 1
+            """,
+            (rrn_hash, customer_id),
+        )
+        if conflict:
+            raise ValueError("동일 주민번호의 활성 고객이 있어 복구할 수 없습니다.")
+
+        cursor = self._pool.execute(
+            """
+            UPDATE customers
+            SET deleted_at = NULL,
+                updated_at = CURRENT_TIMESTAMP,
+                rrn_hash = ?
+            WHERE id = ? AND deleted_at IS NOT NULL
+            """,
+            (rrn_hash, customer_id),
+        )
+        return cursor.rowcount
+
+    def hard_delete_customer(self, customer_id: int) -> int:
+        """Hard-delete customer and all related insurances."""
+        self._pool.execute(
+            """
+            DELETE FROM insurances
+            WHERE customer_id = ?
+            """,
+            (customer_id,),
+        )
+        cursor = self._pool.execute(
+            """
+            DELETE FROM customers
+            WHERE id = ?
+            """,
+            (customer_id,),
+        )
+        return cursor.rowcount
+
+    def purge_all_customers(self) -> None:
+        """Delete all customers and related insurances, reset sequences."""
+        self._pool.execute("DELETE FROM insurances")
+        self._pool.execute("DELETE FROM customers")
+        self._pool.execute("DELETE FROM sqlite_sequence WHERE name = 'insurances'")
+        self._pool.execute("DELETE FROM sqlite_sequence WHERE name = 'customers'")

@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from manim_app.core.config import AppConfig, DatabaseConfig, EncryptionConfig, LoggingConfig
 from manim_app.core.crypto import CryptoService
 from manim_app.models.customer import CustomerCreate
@@ -104,3 +106,98 @@ def test_customer_optional_payment_fields_can_be_empty(tmp_path) -> None:
     assert customer.payment_card == ""
     assert customer.payment_account == ""
     assert customer.payout_account == ""
+
+
+def test_recreate_customer_after_soft_delete_with_same_rrn(tmp_path) -> None:
+    customer_service, _ = build_services(tmp_path)
+
+    first_id = customer_service.create_customer(
+        CustomerCreate(
+            name="홍길동",
+            rrn="971013-9019902",
+            phone="010-1234-5678",
+            address="서울",
+            job="개발자",
+            payment_card="",
+            payment_account="",
+            payout_account="",
+            medical_history="없음",
+            note="first",
+        )
+    )
+    customer_service.delete_customer(first_id)
+
+    second_id = customer_service.create_customer(
+        CustomerCreate(
+            name="홍길동",
+            rrn="971013-9019902",
+            phone="010-9999-8888",
+            address="서울",
+            job="개발자",
+            payment_card="",
+            payment_account="",
+            payout_account="",
+            medical_history="없음",
+            note="second",
+        )
+    )
+    assert second_id > first_id
+
+
+def test_duplicate_active_rrn_raises_friendly_error(tmp_path) -> None:
+    customer_service, _ = build_services(tmp_path)
+
+    customer_service.create_customer(
+        CustomerCreate(
+            name="홍길동",
+            rrn="971013-9019902",
+            phone="010-1234-5678",
+            address="서울",
+            job="개발자",
+            payment_card="",
+            payment_account="",
+            payout_account="",
+            medical_history="없음",
+            note="first",
+        )
+    )
+
+    with pytest.raises(ValueError, match="이미 등록된 주민번호입니다."):
+        customer_service.create_customer(
+            CustomerCreate(
+                name="홍길순",
+                rrn="971013-9019902",
+                phone="010-0000-1111",
+                address="부산",
+                job="디자이너",
+                payment_card="",
+                payment_account="",
+                payout_account="",
+                medical_history="없음",
+                note="duplicate",
+            )
+        )
+
+
+def test_restore_soft_deleted_customer(tmp_path) -> None:
+    customer_service, _ = build_services(tmp_path)
+
+    customer_id = customer_service.create_customer(
+        CustomerCreate(
+            name="복구대상",
+            rrn="971013-9019902",
+            phone="010-1111-2222",
+            address="서울",
+            job="개발자",
+            payment_card="",
+            payment_account="",
+            payout_account="",
+            medical_history="없음",
+            note="restore",
+        )
+    )
+    customer_service.delete_customer(customer_id)
+    customer_service.restore_customer(customer_id)
+
+    restored = customer_service.get_customer(customer_id, reveal_sensitive=False)
+    assert restored.id == customer_id

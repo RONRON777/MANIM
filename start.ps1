@@ -5,18 +5,31 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
 $VenvPython = Join-Path $Root '.venv\Scripts\python.exe'
-$VenvPip = Join-Path $Root '.venv\Scripts\pip.exe'
 $EnvFile = Join-Path $Root '.env.local.ps1'
+$BootstrapPython = $null
+
+function Resolve-PythonCommand {
+  $py = Get-Command py -ErrorAction SilentlyContinue
+  if ($py) {
+    return @('py', '-3')
+  }
+  $python = Get-Command python -ErrorAction SilentlyContinue
+  if ($python) {
+    return @('python')
+  }
+  throw 'Python 실행 파일을 찾지 못했습니다. Python 3를 설치하고 다시 실행하세요.'
+}
 
 function Ensure-Venv {
   if (-not (Test-Path $VenvPython)) {
-    py -3 -m venv .venv
+    & $BootstrapPython -m venv .venv
   }
 }
 
 function Setup-Env {
   Ensure-Venv
-  & $VenvPip install pytest cryptography PyYAML PySide6 | Out-Host
+  & $VenvPython -m pip install --upgrade pip | Out-Host
+  & $VenvPython -m pip install pytest cryptography PyYAML PySide6 | Out-Host
 }
 
 function Ensure-Keys {
@@ -42,6 +55,7 @@ function Ensure-Keys {
 }
 
 try {
+  $BootstrapPython = Resolve-PythonCommand
   Write-Host '[1/3] 실행 환경 준비 중...'
   Setup-Env
   Write-Host '[2/3] 키 확인 중...'

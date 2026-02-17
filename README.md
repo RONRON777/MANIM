@@ -111,6 +111,13 @@ powershell -ExecutionPolicy Bypass -File tools/windows/build.ps1
 powershell -ExecutionPolicy Bypass -File tools/windows/build.ps1 -Installer
 ```
 
+`cmd`에서는 아래처럼 실행할 수 있습니다.
+
+```bat
+tools\windows\build.bat
+tools\windows\build.bat installer
+```
+
 개발용 명령:
 
 ```bash
@@ -127,7 +134,7 @@ export MANIM_ENCRYPTION_KEY='...'
 1. 의존성 설치
 
 ```bash
-pip install -e .[test,sqlcipher]
+python -m pip install -e .[test,sqlcipher]
 ```
 
 2. 최초 키 생성

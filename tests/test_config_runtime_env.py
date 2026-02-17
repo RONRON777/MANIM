@@ -43,3 +43,25 @@ def test_get_required_env_bootstraps_runtime_keys(monkeypatch, tmp_path: Path) -
     assert "MANIM_ENCRYPTION_KEY='" in content
     assert db_key
     assert enc_key
+
+
+def test_ensure_runtime_keys_raises_when_db_exists_without_key_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nested" / "custom.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.write_text("placeholder", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("MANIM_DB_KEY", raising=False)
+    monkeypatch.delenv("MANIM_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setattr(app_config, "_RUNTIME_ENV_LOADED", False)
+    monkeypatch.setattr(app_config, "_iter_env_candidates", lambda: [])
+    monkeypatch.setattr(app_config, "_runtime_root", lambda: tmp_path)
+
+    try:
+        app_config.ensure_runtime_keys(str(db_path))
+        assert False, "expected RuntimeError when DB exists without key file"
+    except RuntimeError as error:
+        assert "Runtime key file is missing" in str(error)

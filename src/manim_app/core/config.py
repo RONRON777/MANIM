@@ -138,13 +138,28 @@ def _runtime_env_path() -> Path:
     return _runtime_root() / RUNTIME_ENV_REL_PATH
 
 
-def _existing_db_candidates() -> list[Path]:
-    """Return common local DB paths used by this app."""
+def _existing_db_candidates(config_db_path: str | None = None) -> list[Path]:
+    """Return likely DB paths that indicate existing encrypted data."""
     runtime_root = _runtime_root()
-    return [
+    candidates: list[Path] = [
         runtime_root / "manim_secure.db",
         Path.cwd() / "manim_secure.db",
     ]
+    if config_db_path:
+        db_path = Path(config_db_path)
+        if not db_path.is_absolute():
+            db_path = (Path.cwd() / db_path).resolve()
+        candidates.append(db_path)
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in candidates:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(resolved)
+    return unique
 
 
 def _ensure_runtime_env_loaded() -> None:
@@ -157,7 +172,7 @@ def _ensure_runtime_env_loaded() -> None:
     _RUNTIME_ENV_LOADED = True
 
 
-def _bootstrap_default_keys_if_needed() -> None:
+def _bootstrap_default_keys_if_needed(config_db_path: str | None = None) -> None:
     """Auto-create default keys when no local key source exists."""
     db_key = os.getenv(DEFAULT_DB_KEY_ENV)
     encryption_key = os.getenv(DEFAULT_ENCRYPTION_KEY_ENV)
@@ -165,7 +180,7 @@ def _bootstrap_default_keys_if_needed() -> None:
         return
 
     runtime_env = _runtime_env_path()
-    has_existing_db = any(path.exists() for path in _existing_db_candidates())
+    has_existing_db = any(path.exists() for path in _existing_db_candidates(config_db_path))
     if has_existing_db and not runtime_env.exists():
         raise RuntimeError(
             "Runtime key file is missing while database file exists. "
@@ -177,6 +192,12 @@ def _bootstrap_default_keys_if_needed() -> None:
     os.environ[DEFAULT_DB_KEY_ENV] = db_key
     os.environ[DEFAULT_ENCRYPTION_KEY_ENV] = encryption_key
     _write_runtime_env(db_key, encryption_key)
+
+
+def ensure_runtime_keys(config_db_path: str | None = None) -> None:
+    """Ensure runtime keys are loaded or bootstrapped for a configured DB path."""
+    _ensure_runtime_env_loaded()
+    _bootstrap_default_keys_if_needed(config_db_path)
 
 
 def resolve_default_config_path() -> Path:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from manim_app.core.config import AppConfig, get_required_env, load_config
+from manim_app.core.config import AppConfig, ensure_runtime_keys, get_required_env, load_config
 from manim_app.core.crypto import CryptoService
 from manim_app.repositories.audit_repository import AuditRepository
 from manim_app.repositories.customer_repository import CustomerRepository
@@ -30,6 +30,7 @@ class ServiceContainer:
 def build_container() -> ServiceContainer:
     """Build dependencies and initialize schema."""
     config = load_config()
+    ensure_runtime_keys(config.database.path)
     encryption_key = get_required_env(config.encryption.key_env)
     crypto = CryptoService.from_base64_key(encryption_key)
 

@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.db
+*.db-*
+.pytest_cache/
+.venv/
+.env
+.tmp/
+.pycache_local/
+config/security.local.yaml
+.DS_Store

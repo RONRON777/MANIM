@@ -1,0 +1,25 @@
+[project]
+name = "manim-insurance-manager"
+version = "0.1.0"
+description = "Secure local GUI app for customer and insurance management"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "cryptography>=44.0.0",
+    "PyYAML>=6.0.2",
+    "PySide6>=6.8.0",
+]
+
+[project.optional-dependencies]
+sqlcipher = ["pysqlcipher3>=1.2.0"]
+test = ["pytest>=8.3.0"]
+
+[project.scripts]
+manim-app = "manim_app.main:run"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

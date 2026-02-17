@@ -1,0 +1,10 @@
+db:
+  path: "./manim_secure.db"
+  key_env: "MANIM_DB_KEY"
+  allow_sqlite_fallback: false
+
+encryption:
+  key_env: "MANIM_ENCRYPTION_KEY"
+
+logging:
+  retention_days: 1095

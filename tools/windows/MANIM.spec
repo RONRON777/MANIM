@@ -1,11 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
 
 block_cipher = None
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ENTRYPOINT = PROJECT_ROOT / 'src' / 'manim_app' / 'main.py'
 
 
 a = Analysis(
-    ['src/manim_app/main.py'],
-    pathex=['.'],
+    [str(ENTRYPOINT)],
+    pathex=[str(PROJECT_ROOT)],
     binaries=[],
     datas=[],
     hiddenimports=['PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets'],
